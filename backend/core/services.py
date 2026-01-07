@@ -1,16 +1,12 @@
-import csv
-import io
-from datetime import datetime, timedelta
-from django.db.models import Sum
-from decimal import Decimal
 from .models import Subject, AttendanceLog, SessionType
-from .importer import SmartImporter  
+from .importer import SmartImporter 
+from decimal import Decimal
 
 def import_attendance_data(user, csv_text):
     """
-    Parses CSV data using SmartImporter and updates the database.
+    Parses CSV data and updates the database.
+    Ensures SessionTypes are unique PER SUBJECT.
     """
-
     importer = SmartImporter(csv_text)
     clean_data = importer.parse()
 
@@ -22,32 +18,35 @@ def import_attendance_data(user, csv_text):
         if not subject_name:
             continue
 
-        
-        subject, _ = Subject.objects.get_or_create(
-            user=user,
-            name__iexact=subject_name,
-            defaults={'name': subject_name}
-        )
+
+        subject = Subject.objects.filter(user=user, name__iexact=subject_name).first()
+        if not subject:
+            subject = Subject.objects.create(user=user, name=subject_name)
+            
         subjects_found.add(subject.name)
 
-        
-        type_name = entry['type']
-        session_type, _ = SessionType.objects.get_or_create(
-            name__iexact=type_name,
-            defaults={'name': type_name, 'weight': 1.0}
-        )
-       
-        subject.session_types.add(session_type)
 
-    
-        status_raw = entry['status'].strip().upper()
+        type_name = entry['type']
         
+
+        session_type = SessionType.objects.filter(
+            subject=subject, 
+            name__iexact=type_name
+        ).first()
+        
+        if not session_type:
+
+            session_type = SessionType.objects.create(
+                subject=subject,  
+                name=type_name, 
+            )
+
+
+        status_raw = entry['status'].strip().upper()
         is_present = status_raw in ['PRESENT', 'P', 'YES', 'ATTENDED']
         status = 'Present' if is_present else 'Absent'
 
-      
         AttendanceLog.objects.update_or_create(
-            subject=subject,
             date=entry['date'],
             session_type=session_type,
             defaults={'status': status}
@@ -60,7 +59,6 @@ def import_attendance_data(user, csv_text):
         "logs_created": logs_created,
         "subjects": list(subjects_found)
     }
-
 def calculate_forecast(user, simulations):
     """
     (This function remains unchanged as it doesn't depend on the import logic)

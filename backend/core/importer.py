@@ -3,13 +3,11 @@ import io
 from datetime import datetime, timedelta
 
 class SmartImporter:
-
     COLUMN_MAPPINGS = {
         'subject': ['subject', 'subject name', 'course', 'course title', 'course name', 'sub', 'subject code'],
         'type': ['type', 'subject type', 'session type', 'l/p', 'category'],
         'date': ['date', 'session date', 'class date', 'time'],
         'status': ['status', 'attendance', 'state', 'att'],
-    
         'present_count': ['present', 'attended', 'p'],
         'absent_count': ['absent', 'bunked', 'a', 'missed'],
         'total_count': ['total', 'conducted', 'classes held']
@@ -24,14 +22,13 @@ class SmartImporter:
     def parse(self):
         f = io.StringIO(self.csv_text)
         reader = csv.reader(f)
-        
         try:
             self.headers = next(reader)
         except StopIteration:
             return []
 
         column_map = {}
-        # Normalize headers to match your synonyms
+        # Normalize headers
         normalized_headers = [h.lower().strip().replace('.', '').replace('_', ' ') for h in self.headers]
 
         for internal_key, synonyms in self.COLUMN_MAPPINGS.items():
@@ -40,7 +37,7 @@ class SmartImporter:
                     column_map[internal_key] = index
                     break
 
-
+        # Mode Detection
         if 'date' in column_map and 'status' in column_map:
             self.mode = 'DAILY'
         elif 'present_count' in column_map:
@@ -57,14 +54,12 @@ class SmartImporter:
                 return row[col_map[key]].strip()
             return None
 
-
         history_start_date = datetime.now() - timedelta(days=90)
 
         for row in self.rows:
             subject = get_val(row, 'subject')
-            if not subject: 
-                continue
-
+            if not subject: continue
+            
             session_type = get_val(row, 'type') or 'Lecture'
 
             if self.mode == 'DAILY':
@@ -72,33 +67,27 @@ class SmartImporter:
                 status = get_val(row, 'status')
                 if date_str and status:
                     processed_data.append({
-                        'subject': subject,
-                        'type': session_type,
-                        'date': self._parse_date(date_str),
-                        'status': status
+                        'subject': subject, 'type': session_type,
+                        'date': self._parse_date(date_str), 'status': status
                     })
 
             elif self.mode == 'SUMMARY':
                 try:
                     p_count = int(get_val(row, 'present_count') or 0)
                     a_count = int(get_val(row, 'absent_count') or 0)
-                except ValueError:
-                    continue
+                except ValueError: continue
 
-
+                # Generate Present logs
                 for i in range(p_count):
                     processed_data.append({
-                        'subject': subject,
-                        'type': session_type,
+                        'subject': subject, 'type': session_type,
                         'date': (history_start_date + timedelta(days=i)).strftime('%Y-%m-%d'),
                         'status': 'Present'
                     })
-                
-
+                # Generate Absent logs
                 for i in range(a_count):
                     processed_data.append({
-                        'subject': subject,
-                        'type': session_type,
+                        'subject': subject, 'type': session_type,
                         'date': (history_start_date + timedelta(days=p_count + i)).strftime('%Y-%m-%d'),
                         'status': 'Absent'
                     })
@@ -107,8 +96,6 @@ class SmartImporter:
 
     def _parse_date(self, date_str):
         for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%m/%d/%Y', '%d/%m/%Y'):
-            try:
-                return datetime.strptime(date_str, fmt).strftime('%Y-%m-%d')
-            except ValueError:
-                continue
+            try: return datetime.strptime(date_str, fmt).strftime('%Y-%m-%d')
+            except ValueError: continue
         return datetime.now().strftime('%Y-%m-%d')

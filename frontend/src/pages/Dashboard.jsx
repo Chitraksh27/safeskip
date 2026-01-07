@@ -6,14 +6,23 @@ import ImportModal from '../components/ImportModal';
 import ForecastPlanner from '../components/ForecastPlanner';
 import api from '../services/api';
 
-// ... (Keep your DonutRing Component here) ...
+// --- SAFER DONUT COMPONENT ---
 const DonutRing = ({ percentage, color, size = 80 }) => {
-  const safePct = Math.min(Math.max(percentage, 0), 100);
+  const validPct = percentage || 0; 
+  const safePct = Math.min(Math.max(validPct, 0), 100);
   const data = [{ value: safePct }, { value: 100 - safePct }];
+
   return (
     <div className="relative flex items-center justify-center">
-      <div className="absolute font-bold text-slate-700" style={{ fontSize: size / 4 }}>{percentage.toFixed(1)}%</div>
-      <PieChart width={size} height={size}><Pie data={data} cx="50%" cy="50%" innerRadius={size/2-5} outerRadius={size/2} startAngle={90} endAngle={-270} dataKey="value" stroke="none"><Cell fill={color} /><Cell fill="#e2e8f0" /></Pie></PieChart>
+      <div className="absolute font-bold text-slate-700" style={{ fontSize: size / 4 }}>
+        {validPct.toFixed(1)}%
+      </div>
+      <PieChart width={size} height={size}>
+        <Pie data={data} cx="50%" cy="50%" innerRadius={size/2-5} outerRadius={size/2} startAngle={90} endAngle={-270} dataKey="value" stroke="none">
+          <Cell fill={color} />
+          <Cell fill="#e2e8f0" />
+        </Pie>
+      </PieChart>
     </div>
   );
 };
@@ -33,14 +42,21 @@ export default function Dashboard() {
 
   useEffect(() => { fetchDashboardData(); }, []);
 
+  // --- LOGIC FIX: PREVENT INFINITY ---
   const getAdvice = (attended, conducted) => {
     if (conducted === 0) return { status: 'SAFE', hours: 0 };
+    
     const currentPct = (attended / conducted);
     const targetPct = threshold / 100;
+
+    // User is SAFE
     if (currentPct >= targetPct) {
       const maxBunks = Math.floor((attended / targetPct) - conducted);
       return { status: 'SAFE', hours: maxBunks >= 0 ? maxBunks : 0 };
-    } else {
+    } 
+    // User is at RISK
+    else {
+      if (targetPct >= 1) return { status: 'RISK', hours: '∞' };
       const num = (targetPct * conducted) - attended;
       const den = 1 - targetPct;
       return { status: 'RISK', hours: Math.ceil(num / den) };
@@ -83,11 +99,15 @@ export default function Dashboard() {
               return (
                 <div key={sub.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
                   <div className="flex justify-between items-start mb-4">
-                    <div><h4 className="font-bold text-slate-800 line-clamp-1">{sub.name}</h4><span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded mt-1 inline-block">{sub.weight}</span></div>
+                    <div>
+                        <h4 className="font-bold text-slate-800 line-clamp-1">{sub.name}</h4>
+                        {/* Display Type instead of Weight */}
+                        <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded mt-1 inline-block">{sub.type || 'Lecture'}</span>
+                    </div>
                     <DonutRing percentage={sub.percentage} color={getStatusColor(sub.percentage)} size={50} />
                   </div>
                   <div className={`text-xs px-2 py-1.5 rounded flex justify-center font-medium ${advice.status === 'SAFE' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                       {advice.status === 'SAFE' ? `Bunkable: ${advice.hours}h` : `Recover: +${advice.hours}h`}
+                       {advice.status === 'SAFE' ? `Skippable: ${advice.hours}h` : `Recover: +${advice.hours}h`}
                   </div>
                 </div>
               );

@@ -141,7 +141,7 @@ export default function ForecastPlanner({ currentGlobalPct, subjects = [] }) {
                   btnStyle = "bg-green-100 text-green-700";
                 } else if (action === 'SKIP') {
                   cardStyle = "border-red-200 bg-red-50 opacity-100 ring-1 ring-red-200";
-                  btnContent = <><XCircle size={16} /> Bunking</>;
+                  btnContent = <><XCircle size={16} /> Skipping</>;
                   btnStyle = "bg-red-100 text-red-700";
                 }
 
