@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser # <--- 1. IMPORT THIS
 from rest_framework import status
 from django.contrib.auth.models import User
 import traceback
@@ -8,9 +9,9 @@ import traceback
 from .models import Subject, AttendanceLog, SessionType
 from .services import import_attendance_data
 
-# 1. REGISTER API (Sign Up)
+# 1. REGISTER API
 class RegisterView(APIView):
-    permission_classes = [AllowAny] # Allow anyone to register
+    permission_classes = [AllowAny]
 
     def post(self, request):
         username = request.data.get('username')
@@ -30,16 +31,13 @@ class RegisterView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# 2. DASHBOARD API (The Reporter)
+# 2. DASHBOARD API
 class DashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        print(f"\n🕵️ DASHBOARD DEBUG | User: {user.username} (ID: {user.id})")
-        
         subjects = Subject.objects.filter(user=user)
-        print(f"   Found {subjects.count()} Subjects linked to this user.")
         
         subject_data = []
         global_attended = 0
@@ -47,13 +45,9 @@ class DashboardView(APIView):
 
         for sub in subjects:
             sessions = SessionType.objects.filter(subject=sub)
-            
-            # Count the Logs (The Truth)
             logs = AttendanceLog.objects.filter(session_type__in=sessions)
             total = logs.count()
             present = logs.filter(status__in=['Present', 'PRESENT', 'P', 'Present']).count()
-            
-            print(f"   ➡️ {sub.name}: Found {total} logs ({present} Present)")
             
             pct = (present / total * 100) if total > 0 else 0
             
@@ -73,8 +67,6 @@ class DashboardView(APIView):
 
         global_pct = (global_attended / global_conducted * 100) if global_conducted > 0 else 100
         
-        print(f"✅ SENDING RESPONSE: {len(subject_data)} subjects\n")
-
         return Response({
             "global": {
                 "attended": global_attended,
@@ -85,30 +77,36 @@ class DashboardView(APIView):
         })
 
 
-# 3. IMPORT API (The Worker)
+# 3. IMPORT API (The Fix is Here!)
 class ImportAttendanceView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser) # <--- 2. ENABLE FILE PARSING
 
     def post(self, request):
-        csv_data = request.data.get('csv_data', '')
-        if not csv_data:
-            return Response({"error": "No data provided"}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if file exists
+        if 'file' not in request.FILES:
+            return Response({"error": "No file uploaded. Key 'file' missing."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        file_obj = request.FILES['file']
         
         try:
-            summary = import_attendance_data(request.user, csv_data)
+            # Decode the file bytes to string
+            csv_text = file_obj.read().decode('utf-8')
+            
+            summary = import_attendance_data(request.user, csv_text)
             return Response({"message": "Import Successful", "summary": summary}, status=status.HTTP_200_OK)
+        
+        except UnicodeDecodeError:
+            return Response({"error": "Invalid file encoding. Please upload a standard CSV file."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             trace = traceback.format_exc()
             print("❌ IMPORT CRASHED:\n" + trace)
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# 4. FORECAST API (The Predictor)
+# 4. FORECAST API
 class ForecastView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # This handles the "What-If" analysis
-        # For now, we will return a basic success to prevent crashes.
-        # Logic can be added later if needed.
         return Response({"status": "Forecast logic pending", "results": []}, status=status.HTTP_200_OK)
