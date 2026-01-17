@@ -6,10 +6,10 @@ import { AuthProvider } from './context/AuthContext'
 import { Analytics } from "@vercel/analytics/react"
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
+  <>
+    <Analytics />
     <AuthProvider>  {/* <--- Wrap App with Provider */}
       <App />
-      <Analytics />
     </AuthProvider>
-  </React.StrictMode>,
+  </>
 )
