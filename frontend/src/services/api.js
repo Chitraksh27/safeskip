@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // 1. CHANGE THIS TO LOCALHOST (since you are running locally)
-const API_URL = "http://127.0.0.1:8000/api/"; 
-// const API_URL = "https://safeskip-backend.onrender.com/api/"; // Keep this commented out for later deployment
+// const API_URL = "http://127.0.0.1:8000/api/"; 
+const API_URL = "https://safeskip-backend.onrender.com/api/"; // Keep this commented out for later deployment
 
 const api = axios.create({
     baseURL: API_URL,
