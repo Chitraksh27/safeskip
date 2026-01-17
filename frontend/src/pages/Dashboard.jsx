@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell } from 'recharts';
 import { LogOut, RefreshCw, Settings, Calendar as CalendarIcon } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
@@ -6,7 +6,7 @@ import ImportModal from '../components/ImportModal';
 import ForecastPlanner from '../components/ForecastPlanner';
 import api from '../services/api';
 
-// --- SAFER DONUT COMPONENT ---
+// --- SAFER DONUT COMPONENT (Unchanged) ---
 const DonutRing = ({ percentage, color, size = 80 }) => {
   const validPct = percentage || 0; 
   const safePct = Math.min(Math.max(validPct, 0), 100);
@@ -32,6 +32,9 @@ export default function Dashboard() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [dashboardData, setDashboardData] = useState({ global: { attended: 0, conducted: 0, percentage: 100 }, subjects: [] });
   const [threshold, setThreshold] = useState(75);
+  
+  // 🔑 NEW: Key to force ForecastPlanner to reload after import
+  const [plannerKey, setPlannerKey] = useState(0); 
 
   const fetchDashboardData = async () => {
     try {
@@ -42,20 +45,21 @@ export default function Dashboard() {
 
   useEffect(() => { fetchDashboardData(); }, []);
 
-  // --- LOGIC FIX: PREVENT INFINITY ---
+  // 🔑 NEW: Handler to update everything after Import
+  const handleImportSuccess = () => {
+      fetchDashboardData();        // 1. Update stats (Donuts)
+      setPlannerKey(prev => prev + 1); // 2. Force ForecastPlanner to re-fetch Schedule
+  };
+
+  // --- LOGIC (Unchanged) ---
   const getAdvice = (attended, conducted) => {
     if (conducted === 0) return { status: 'SAFE', hours: 0 };
-    
     const currentPct = (attended / conducted);
     const targetPct = threshold / 100;
-
-    // User is SAFE
     if (currentPct >= targetPct) {
       const maxBunks = Math.floor((attended / targetPct) - conducted);
       return { status: 'SAFE', hours: maxBunks >= 0 ? maxBunks : 0 };
-    } 
-    // User is at RISK
-    else {
+    } else {
       if (targetPct >= 1) return { status: 'RISK', hours: '∞' };
       const num = (targetPct * conducted) - attended;
       const den = 1 - targetPct;
@@ -101,7 +105,6 @@ export default function Dashboard() {
                   <div className="flex justify-between items-start mb-4">
                     <div>
                         <h4 className="font-bold text-slate-800 line-clamp-1">{sub.name}</h4>
-                        {/* Display Type instead of Weight */}
                         <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded mt-1 inline-block">{sub.type || 'Lecture'}</span>
                     </div>
                     <DonutRing percentage={sub.percentage} color={getStatusColor(sub.percentage)} size={50} />
@@ -117,11 +120,17 @@ export default function Dashboard() {
         {/* Forecast Section */}
         <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center gap-3 mb-6"><div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><CalendarIcon size={20} /></div><h3 className="text-lg font-bold text-slate-800">Attendance Forecast</h3></div>
-          <ForecastPlanner currentGlobalPct={dashboardData.global.percentage} subjects={dashboardData.subjects} />
+          
+          {/* 🔑 THIS IS THE KEY FIX: The 'key' prop forces reload */}
+          <ForecastPlanner 
+             key={plannerKey} 
+             currentGlobalPct={dashboardData.global.percentage} 
+             subjects={dashboardData.subjects} 
+          />
         </section>
       </main>
 
-      <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onSuccess={fetchDashboardData} />
+      <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onSuccess={handleImportSuccess} />
     </div>
   );
 }

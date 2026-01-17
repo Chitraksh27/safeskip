@@ -5,7 +5,7 @@ from decimal import Decimal
 def import_attendance_data(user, csv_text):
     """
     Parses CSV data and updates the database.
-    Ensures SessionTypes are unique PER SUBJECT.
+    Prioritizes Subject Name over Subject Code for display.
     """
     importer = SmartImporter(csv_text)
     clean_data = importer.parse()
@@ -14,33 +14,42 @@ def import_attendance_data(user, csv_text):
     subjects_found = set()
 
     for entry in clean_data:
-        subject_name = entry['subject']
+        # entry['subject'] is now a dict: {'name': 'Math', 'code': 'MAT101'}
+        sub_data = entry['subject']
+        subject_name = sub_data['name']
+        subject_code = sub_data['code']
+
         if not subject_name:
             continue
 
-
+        # 1. Try to find existing subject by Name OR Code (to avoid duplicates)
+        # Priority: Check if we have a subject with this name
         subject = Subject.objects.filter(user=user, name__iexact=subject_name).first()
+        
+        # Optional: If not found by name, check by code (if your model has a code field)
+        # if not subject and subject_code:
+        #    subject = Subject.objects.filter(user=user, code__iexact=subject_code).first()
+
         if not subject:
+            # Create new subject
+            # If your Subject model has a 'code' field, add it here:
+            # Subject.objects.create(user=user, name=subject_name, code=subject_code)
             subject = Subject.objects.create(user=user, name=subject_name)
             
         subjects_found.add(subject.name)
 
-
         type_name = entry['type']
         
-
         session_type = SessionType.objects.filter(
             subject=subject, 
             name__iexact=type_name
         ).first()
         
         if not session_type:
-
             session_type = SessionType.objects.create(
                 subject=subject,  
                 name=type_name, 
             )
-
 
         status_raw = entry['status'].strip().upper()
         is_present = status_raw in ['PRESENT', 'P', 'YES', 'ATTENDED']
@@ -59,6 +68,7 @@ def import_attendance_data(user, csv_text):
         "logs_created": logs_created,
         "subjects": list(subjects_found)
     }
+
 def calculate_forecast(user, simulations):
     """
     (This function remains unchanged as it doesn't depend on the import logic)
@@ -67,7 +77,6 @@ def calculate_forecast(user, simulations):
     subject_state = {} 
     global_state = {'attended': Decimal(0), 'conducted': Decimal(0)}
 
-    
     all_subjects = Subject.objects.filter(user=user)
     for sub in all_subjects:
         stats = sub.current_status_details
@@ -80,7 +89,6 @@ def calculate_forecast(user, simulations):
     for sim in simulations:
         sub_id = sim['subject_id']
         action = sim.get('action', 'SKIP').upper()
-        
         
         weight = Decimal(sim.get('weight', 1.0))
         
